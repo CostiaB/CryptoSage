@@ -1,90 +1,96 @@
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from langchain.llms import OpenAI
+
 import os
 
 with open('openai', 'r') as file:
     OPENAI_API_KEY = file.readline().strip()
 
 os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
+import os
+import numpy as np
+from pycoingecko import CoinGeckoAPI
+from datetime import datetime, timedelta
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
+# Убедитесь, что ваш OpenAI API ключ установлен в переменной окружения
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Шаблон для обработки запроса
-prompt = PromptTemplate(
-    input_variables=["coin"],
-    template="What is the current state of the following cryptocurrency: {coin}?"
+if OPENAI_API_KEY is None:
+    raise ValueError("API ключ OpenAI не установлен. Установите переменную окружения OPENAI_API_KEY.")
+
+# Создаем экземпляр ChatOpenAI с моделью gpt-3.5-turbo
+llm = ChatOpenAI(
+    openai_api_key=OPENAI_API_KEY,
+    model="gpt-3.5-turbo"
 )
 
 
-# Создаем языковую модель
-llm = OpenAI(openai_api_key=OPENAI_API_KEY,model="gpt-3.5-turbo")
-
-# Создаем цепочку, которая связывает модель с шаблоном
-chain = LLMChain(llm=llm, prompt=prompt)
-
-def ask_bot(coin_name):
-    # Передаем запрос пользователя в цепочку
-    response = chain.run(coin=coin_name)
-    return response
+system_template = "Ты помощник, который распознает название криптовалюты из текста пользователя."
+human_template = "Какая криптовалюта упоминается в следующем тексте: {text}?"
 
 
+system_prompt = SystemMessagePromptTemplate.from_template(system_template)
+human_prompt = HumanMessagePromptTemplate.from_template(human_template)
 
-from pycoingecko import CoinGeckoAPI
 
-# Инициализация клиента CoinGecko
+chat_prompt = ChatPromptTemplate.from_messages([system_prompt, human_prompt])
+
+# Интеграция с CoinGecko для получения актуальных данных
 cg = CoinGeckoAPI()
 
-# Функция получения текущего курса криптовалюты
-def get_current_price(coin_id):
-    data = cg.get_price(ids=coin_id, vs_currencies='usd')
-    return data[coin_id]['usd']
 
-# Функция получения изменения цены за год
-def get_price_change(coin_id):
-    coin_data = cg.get_coin_market_chart_by_id(id=coin_id, vs_currency='usd', days=365)
-    prices = coin_data['prices']
-    start_price = prices[0][1]
-    end_price = prices[-1][1]
-    price_change = ((end_price - start_price) / start_price) * 100
-    return price_change
-
-
-
+# Определяем класс для бота
 class CryptoBot:
-    def __init__(self, model, coin_api):
-        self.chain = LLMChain(llm=model, prompt=prompt)
-        self.coin_api = coin_api
+    def __init__(self, llm, chat_prompt):
+        self.llm = llm
+        self.chat_prompt = chat_prompt
 
     def get_info(self, coin_name):
-        # Получаем информацию через LangChain
-        response = self.chain.run(coin=coin_name)
-        return response
+        # Получение общей информации о монете
+        response = self.llm([
+            SystemMessage(content="Ты помощник, который предоставляет информацию о криптовалютах."),
+            HumanMessage(content=f"Дай общую информацию о {coin_name}.")
+        ])
 
-    def get_current_price(self, coin_name):
-        return self.coin_api.get_price(ids=coin_name, vs_currencies='usd')[coin_name]['usd']
+        # Получение актуальной цены из CoinGecko
+        try:
+            price_data = cg.get_price(ids=coin_name.lower(), vs_currencies='usd')
+            price = price_data[coin_name.lower()]['usd']
+            price_info = f"Текущая цена {coin_name}: ${price}"
+        except Exception as e:
+            price_info = f"Не удалось получить цену для {coin_name}. Ошибка: {str(e)}"
 
-    def get_price_change_year(self, coin_name):
-        coin_data = self.coin_api.get_coin_market_chart_by_id(id=coin_name, vs_currency='usd', days=365)
-        prices = coin_data['prices']
-        start_price = prices[0][1]
-        end_price = prices[-1][1]
-        price_change = ((end_price - start_price) / start_price) * 100
-        return price_change
+        return response.content, price_info
+
+    def get_crypto_summary(self, user_input):
+        # Создаем сообщение на основе пользовательского ввода
+        messages = self.chat_prompt.format_messages(text=user_input)
+
+        # Выполняем запрос к модели для извлечения названия монеты
+        response = self.llm(messages)
+        extracted_text = response.content.strip()
+
+        # Простое предположение, что модель может явно указать монету
+        coin_name_candidates = ["bitcoin", "ethereum", "litecoin", "ripple", "dogecoin"]  # Пример монет
+        coin_name = None
+        for coin in coin_name_candidates:
+            if coin.lower() in extracted_text.lower():
+                coin_name = coin
+                break
+
+        if coin_name is None:
+            return f"Не удалось распознать криптовалюту из текста: {user_input}. Попробуйте использовать другое название."
+
+        general_info, price_info = self.get_info(coin_name)
+        return f"Информация о {coin_name.capitalize()}:\n{general_info}\n{price_info}"
 
 
+# Инициализируем бота с созданной моделью и шаблоном
+bot = CryptoBot(llm=llm, chat_prompt=chat_prompt)
 
-# Инициализация модели и API
-llm = OpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-3.5-turbo")
-coin_api = CoinGeckoAPI()
-
-# Создаем экземпляр бота
-bot = CryptoBot(model=llm, coin_api=coin_api)
-
-# Запрос информации о Bitcoin
-general_info = bot.get_info("Bitcoin")
-current_price = bot.get_current_price("bitcoin")
-price_change_year = bot.get_price_change_year("bitcoin")
-
-print("General Info:", general_info)
-print("Current Price of Bitcoin:", current_price)
-print("Price Change in Last Year:", price_change_year, "%")
+# Получаем информацию по криптовалюте
+if __name__ == "__main__":
+    user_input = "эфир"  # Пример пользовательского ввода
+    summary = bot.get_crypto_summary(user_input)
+    print(summary)

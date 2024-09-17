@@ -1,16 +1,21 @@
-
 import os
+from pycoingecko import CoinGeckoAPI
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, \
+    HumanMessagePromptTemplate
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+import difflib  # To implement fuzzy matching
+from pydantic import BaseModel, Field
 
 with open('openai', 'r') as file:
     OPENAI_API_KEY = file.readline().strip()
 
 os.environ['OPENAI_API_KEY'] = OPENAI_API_KEY
-import os
-from pycoingecko import CoinGeckoAPI
-from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-from langchain.schema import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-import difflib  # To implement fuzzy matching
+
+
+class Coin(BaseModel):
+    coin_name: str = Field(description="Coin name from Coingecko")
+
 
 # Ensure your OpenAI API key is set in the environment variable
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -25,7 +30,14 @@ llm = ChatOpenAI(
 )
 
 # Prompt template for the chatbot
-system_template = "You are an assistant that identifies the name of a cryptocurrency from the user's text."
+
+system_template = (
+    "You are expert in cryptocurrency. You extract correct coin name from user query. "
+    "Take into account that user can name coins in a different ways. "
+    "For example ethereum can be called efir, ETH, etc. "
+    "You should return cryptocurrency name appropriate for Coingecko"
+    )
+
 human_template = "What cryptocurrency is mentioned in the following text: {text}?"
 
 # Create message templates
@@ -58,7 +70,8 @@ class CryptoBot:
     def get_info(self, coin_name):
         """Get general information and price of the given cryptocurrency."""
         response = self.llm.invoke([
-            SystemMessage(content="You are an assistant that provides information about cryptocurrencies."),
+            SystemMessage(
+                content="You are an assistant that provides information about cryptocurrencies."),
             HumanMessage(content=f"Give me general information about {coin_name}.")
         ])
 
@@ -77,8 +90,9 @@ class CryptoBot:
         messages = self.chat_prompt.format_messages(text=user_input)
 
         # Call the model to process the message using the `invoke` method
-        response = self.llm.invoke(messages)
-        extracted_text = response.content.strip().lower()
+        response = self.llm.with_structured_output(schema=Coin).invoke(messages)
+        print("Response", response)
+        extracted_text = response.coin_name.strip().lower()
 
         # Debugging: Print extracted coin name
         print(f"Extracted coin name: {extracted_text}")
@@ -87,7 +101,8 @@ class CryptoBot:
         coin_name = self.match_coin(extracted_text)
 
         if coin_name is None:
-            return f"Could not recognize a cryptocurrency from the text: {user_input}. Please try a different name."
+            return (f"Could not recognize a cryptocurrency from the text: {user_input}."
+                    f" Please try a different name.")
 
         general_info, price_info = self.get_info(coin_name)
         return f"Information about {coin_name.capitalize()}:\n{general_info}\n{price_info}"
@@ -95,7 +110,8 @@ class CryptoBot:
     def match_coin(self, extracted_text):
         """Match the extracted text with available coins from CoinGecko using fuzzy matching."""
         # List of all coin names and symbols for matching
-        coin_names = {coin_id: (name, symbol) for coin_id, (name, symbol) in self.coin_list.items()}
+        coin_names = {coin_id: (name, symbol) for coin_id, (name, symbol) in
+                      self.coin_list.items()}
 
         # Try to find a close match using fuzzy matching
         closest_name = None
@@ -125,6 +141,6 @@ bot = CryptoBot(llm=llm, chat_prompt=chat_prompt)
 
 # Example usage
 if __name__ == "__main__":
-    user_input = "Tell me about PERP"  # Example user input
+    user_input = "Tell me about aptos coin"  # Example user input
     summary = bot.get_crypto_summary(user_input)
     print(summary)

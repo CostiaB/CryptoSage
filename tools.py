@@ -60,7 +60,7 @@ def match_coin(extracted_text, coin_dict):
     return None
 
 
-
+@tool
 def get_historical_data(coin_name):
     """
     Gets the data for the last 365 days and calculates percent range of prices
@@ -96,14 +96,13 @@ def get_historical_data(coin_name):
 
         return min_price, max_price, change_percentage, change_percent_from_max
     except Exception as err:
-        return None, None, f"Can't get the historical data for {coin_name}. Error: {str(err)}"
+        return f"Can't get the historical data for {coin_name}. Error: {str(err)}"
 
 
 @tool
 def calculate_rsi(coin_name, window_length=14):
     """
     Args:
-        prices (no.array): Prices of a coin
         window_length (int): Size of window for RSI calculation
         coin_name: (str): Cryptocoin name
     Returns:
@@ -144,9 +143,6 @@ def get_trade_signal(coin_name):
         signal (str): Signal
         rsi (float): RSI value
     """
-
-
-
     rsi = calculate_rsi(coin_name)
     signal = "Neutral"
     if rsi < 30:
@@ -156,12 +152,75 @@ def get_trade_signal(coin_name):
 
     return rsi, signal
 
+@tool
+def ohlc_values(coin_name):
+    """
+        Gets the data for the last 180 days and calculates percent range of prices
+        Args:
+            coin_name (str): Crypto coin ticker name
+        Returns:
+            prices list(list(float):  open, high, low, close prices for coins
 
 
-'''
-coins = get_historical_data("bitcoin")
-print(coins)
+    """
+    try:
+        # Data for the last 180 days
+        historical_data = cg.get_coin_ohlc_by_id(id=coin_name,
+                                                vs_currency='usd',
+                                                days=180)
 
 
-prices (np.array): all prices in a year
-'''
+
+
+        return historical_data
+    except Exception as err:
+        return  f"Can't get the historical data for {coin_name}. Error: {str(err)}"
+
+
+@tool
+def calculate_fibonacci_levels(coin_name):
+    """
+    Call this tool only if user directly asks for Fibonacci levels
+    Calculate Fibonacci retracement levels for a given list of prices.
+
+    Args:
+        coin_name (str): Token name.
+
+    Returns:
+        dict: A dictionary containing Fibonacci levels.
+    """
+    try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365)
+        start_timestamp = int(start_date.timestamp())
+        end_timestamp = int(end_date.timestamp())
+
+        historical_data = cg.get_coin_market_chart_range_by_id(
+            id=coin_name.lower(),
+            vs_currency='usd',
+            from_timestamp=start_timestamp,
+            to_timestamp=end_timestamp
+        )
+        prices = np.array(historical_data['prices'])[:, 1]
+
+        # Find the highest and lowest price in the data
+        high = max(prices)
+        low = min(prices)
+        print(high, low)
+
+        # Calculate Fibonacci retracement levels
+        diff = high - low
+        levels = {
+            '23.6%': high - (diff * 0.236),
+            '38.2%': high - (diff * 0.382),
+            '50%': high - (diff * 0.500),
+            '61.8%': high - (diff * 0.618),
+            '78.6%': high - (diff * 0.786),
+            'High': high,
+            'Low': low
+        }
+        return levels
+    except Exception as err:
+        return f"Can't calculate Fibonacci levels for {coin_name}. Error: {str(err)}"
+
+

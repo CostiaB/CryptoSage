@@ -7,9 +7,15 @@ from typing_extensions import TypedDict
 from langgraph.graph.message import AnyMessage, add_messages
 import os
 from langchain_openai import ChatOpenAI
-from tools import get_coin_list, match_coin, get_historical_data, calculate_rsi, get_trade_signal
+from tools import get_coin_list, match_coin, get_historical_data, calculate_rsi, get_trade_signal, \
+    ohlc_values, calculate_fibonacci_levels
 from utilities import _print_event
-
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph, START
+from langgraph.prebuilt import tools_condition
+from utilities import create_tool_node_with_fallback
+import shutil
+import uuid
 
 with open('openai', 'r') as file:
     OPENAI_API_KEY = file.readline().strip()
@@ -39,7 +45,8 @@ class Assistant:
         self.runnable = runnable
 
     def __call__(self, state: State, config: RunnableConfig):
-        while True:
+        i = 0
+        while i < 5:
             configuration = config.get("configurable", {})
             passenger_id = configuration.get("passenger_id", None)
             state = {**state, "user_info": passenger_id}
@@ -55,6 +62,7 @@ class Assistant:
                 state = {**state, "messages": messages}
             else:
                 break
+            i += 1
         return {"messages": result}
 
 
@@ -74,6 +82,7 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             "You are a helpful support assistant for cryptocurrencies. "
+            "You should check the coin name. It should be accepted by coingecko API"
             " Use the provided tools to obtain price characteristics, indicators values, and other information to assist the user's queries. "
             " When searching, be persistent. Expand your query bounds if the first search returns no results. "
             " If a search comes up empty, expand your search before giving up."
@@ -87,15 +96,14 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
 part_1_tools = [
     get_historical_data,
     calculate_rsi,
-    get_trade_signal
+    get_trade_signal,
+    #t/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////ohlc_values,
+    calculate_fibonacci_levels
+
 ]
 part_1_assistant_runnable = primary_assistant_prompt | llm.bind_tools(part_1_tools)
 
 
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, StateGraph, START
-from langgraph.prebuilt import tools_condition
-from utilities import create_tool_node_with_fallback
 
 builder = StateGraph(State)
 
@@ -126,17 +134,15 @@ except Exception:
     pass"""
 
 
-import shutil
-import uuid
 
 # Let's create an example conversation a user might have with the assistant
 tutorial_questions = [
-    "What is the price for Perplexity Protocol",
-    "Can you tell me about BTC?",
-    "Do I need to buy Aptos?",
-    "What do you know about ARPA and what data do you have about it?",
-    "What is the price for Perplexity Protocol",
-    "What coins can you recommend for traiding?"
+    #"What is the price for Perplexity Protocol",
+    #"Can you tell me about BTC?",
+    "Calculate Fibonacci levels for Bitcoin",
+    #"What do you know about ARPA and what data do you have about it?",
+    #"What is the price for Perplexity Protocol",
+    #"What coins can you recommend for trading?"
 ]
 
 # Update with the backup file so we can restart from the original place in each section

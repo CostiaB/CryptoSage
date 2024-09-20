@@ -8,7 +8,7 @@ from langgraph.graph.message import AnyMessage, add_messages
 import os
 from langchain_openai import ChatOpenAI
 from tools import get_coin_list, match_coin, get_historical_data, calculate_rsi, get_trade_signal, \
-    ohlc_values, calculate_fibonacci_levels
+    ohlc_values, calculate_fibonacci_levels, find_support_resistance, MACD_Alligator_advice
 from utilities import _print_event
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph, START
@@ -16,6 +16,7 @@ from langgraph.prebuilt import tools_condition
 from utilities import create_tool_node_with_fallback
 import shutil
 import uuid
+import pandas_ta as ta
 
 with open('openai', 'r') as file:
     OPENAI_API_KEY = file.readline().strip()
@@ -81,8 +82,8 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "You are a helpful support assistant for cryptocurrencies. "
-            "You should check the coin name. It should be accepted by coingecko API"
+            " You are a helpful support assistant for cryptocurrencies. "
+            " You should check the coin name. It should be accepted by coingecko API"
             " Use the provided tools to obtain price characteristics, indicators values, and other information to assist the user's queries. "
             " When searching, be persistent. Expand your query bounds if the first search returns no results. "
             " If a search comes up empty, expand your search before giving up."
@@ -97,8 +98,10 @@ part_1_tools = [
     get_historical_data,
     calculate_rsi,
     get_trade_signal,
-    #t/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////ohlc_values,
-    calculate_fibonacci_levels
+    #ohlc_values,
+    calculate_fibonacci_levels,
+    find_support_resistance,
+    MACD_Alligator_advice
 
 ]
 part_1_assistant_runnable = primary_assistant_prompt | llm.bind_tools(part_1_tools)
@@ -137,9 +140,9 @@ except Exception:
 
 # Let's create an example conversation a user might have with the assistant
 tutorial_questions = [
-    #"What is the price for Perplexity Protocol",
-    #"Can you tell me about BTC?",
-    "Calculate Fibonacci levels for Bitcoin",
+    #"What is the price for PERP",
+    "Can you tell me about BTC? its resistance level?",
+    "Calculate Fibonacci levels for ETH and give trading advises",
     #"What do you know about ARPA and what data do you have about it?",
     #"What is the price for Perplexity Protocol",
     #"What coins can you recommend for trading?"

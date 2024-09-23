@@ -17,6 +17,7 @@ from utilities import create_tool_node_with_fallback
 import shutil
 import uuid
 import pandas_ta as ta
+from time import  sleep
 
 with open('openai', 'r') as file:
     OPENAI_API_KEY = file.readline().strip()
@@ -82,9 +83,10 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            " You are a helpful support assistant for cryptocurrencies. "
+            " You are a knowledgeable support assistant for cryptocurrencies. "
             " You should check the coin name. It should be accepted by coingecko API"
-            " Use the provided tools to obtain price characteristics, indicators values, and other information to assist the user's queries. "
+            " Use the provided tools to obtain price characteristics,"
+            "  it can be indicators values, and other information to assist the user's queries. "
             " When searching, be persistent. Expand your query bounds if the first search returns no results. "
             " If a search comes up empty, expand your search before giving up."
             "\n\nCurrent user:\n\n{user_info}\n"
@@ -140,12 +142,13 @@ except Exception:
 
 # Let's create an example conversation a user might have with the assistant
 tutorial_questions = [
-    #"What is the price for PERP",
+    "What is the price for LTC",
     "Can you tell me about BTC? its resistance level?",
     "Calculate Fibonacci levels for ETH and give trading advises",
-    #"What do you know about ARPA and what data do you have about it?",
-    #"What is the price for Perplexity Protocol",
-    #"What coins can you recommend for trading?"
+    "What do you know about ARPA and what data do you have about it?",
+    "What is the price for Perplexity Protocol",
+    "What coins can you recommend for trading?",
+    "How to trade APT?"
 ]
 
 # Update with the backup file so we can restart from the original place in each section
@@ -160,6 +163,7 @@ config = {
 
 _printed = set()
 for question in tutorial_questions:
+    sleep(60)
     events = part_1_graph.stream(
         {"messages": ("user", question)}, config, stream_mode="values"
     )

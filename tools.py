@@ -222,6 +222,7 @@ def calculate_fibonacci_levels(coin_name):
     except Exception as err:
         return f"Can't calculate Fibonacci levels for {coin_name}. Error: {str(err)}"
 
+
 @tool
 def find_support_resistance(coin_name, window=100):
     """

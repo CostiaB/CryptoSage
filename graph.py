@@ -148,7 +148,8 @@ tutorial_questions = [
     "What do you know about ARPA and what data do you have about it?",
     "What is the price for Perplexity Protocol",
     "What coins can you recommend for trading?",
-    "How to trade APT?"
+    "How to trade APT?",
+    "What can you tell about SOLANA? Any traiding advises?"
 ]
 
 # Update with the backup file so we can restart from the original place in each section
